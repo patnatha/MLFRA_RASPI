@@ -1,0 +1,7 @@
+__pycache__/
+archive/*
+config/*
+data/*
+*.pkl
+mlfra_wrapper.py
+*.txt
