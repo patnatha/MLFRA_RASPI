@@ -31,6 +31,7 @@ mlfraResult = DigitalInOut(board.D13)
 mlfraResult.direction = Direction.OUTPUT
 mlfraResult.value = False
 
+#The debugging file output
 theFilename = "/" + os.path.join("home","pi","Documents","MLFRA",datetime.now().strftime("%Y%m%d") + ".txt")
 if(not os.path.isfile(theFilename)):
     f = open(theFilename, 'w')
@@ -119,21 +120,21 @@ def queryMLFRA(theBlock, blockSlice):
             #Decode the results
             runRes = data.decode("utf-8").split(",")
             
-            #Append the time function
+            #Append the time results
             elapsedSec = round((time.monotonic() - stime), 2)
             runRes.append(elapsedSec)
 
-            #Write the output results
+            #Write the output results to the debugging file
             f = open(theFilename, 'a')
             f.write(datetime.now().strftime("%m/%d/%Y %H:%M:%S") + ",")
             f.write(str(runRes[0]) + "," + str(runRes[1]) + "," + str(runRes[2]) + "\n")
             f.close()
 
-            #Print the output results
+            #Print the output results and update the LED
             print(runRes) 
             mlfraRunningLED.value = False
 
-            #update the output line with the result
+            #update the output digital lines with the result
             if(runRes != None):
                 intRes = int(runRes[0])
                 if(intRes == 0):
@@ -202,21 +203,20 @@ while True:
                 print("Prevented Frame Shift")
         
             #Parse the value and convert to float
-            parsedVal = float(struct.unpack('>h', line)[0]) / 100
+            parsedVal = float(struct.unpack('>h', line)[0]) / 100.0
        
             #Place the new value into the array 
-            theData[curInd % blockSize] = parsedVal
+            theData[curInd] = parsedVal
             curInd += 1
 
-            #Query the MLFRA only if the last thread is dea only if the last thread is deadd
+            #Query the MLFRA only if the last thread is dead
             if(curInd % checkInterval == 0 and 
                 (theThread == None or (theThread != None and not theThread.is_alive()))):
                 theThread = threading.Thread(target=queryMLFRA, args=(theData, curInd,))
                 theThread.start()
 
-            #Reset the pointer once at the end
-            if(curInd >= blockSize): 
-                curInd = 0
+            #Reset the pointer once at the end to the start
+            if(curInd >= blockSize): curInd = 0
     except Exception as err:
         print(err) 
 
