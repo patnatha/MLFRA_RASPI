@@ -5,3 +5,4 @@ data/*
 *.pkl
 mlfra_wrapper.py
 *.txt
+*.pyc

@@ -13,7 +13,6 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
     #Loop on connection
     while True:
-        inputArr = []
         dataStream = ""
         conn, addr = s.accept()
         with conn:
@@ -34,8 +33,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 #Decode the data and make sure fully recieved
                 dataStream += data.decode('utf-8')
                 if(len(dataStream.split(',')) == 6000):
+                    inputArr = []
                     for x in dataStream.split(','):
                         inputArr.append(float(x))
+
+                    print(inputArr[0], inputArr[-1])
 
                     #Run the MLFRA algorithm 
                     print("Received:", len(inputArr), "and running MLFRA!")
