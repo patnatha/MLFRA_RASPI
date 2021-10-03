@@ -11,15 +11,22 @@ from digitalio import DigitalInOut, Direction, Pull
 from subprocess import Popen, DEVNULL, PIPE, run
 import threading
 
+debug = False
+
 #MLFRA result LED light
 mlfraResultLED = DigitalInOut(board.D12)
 mlfraResultLED.direction = Direction.OUTPUT
 mlfraResultLED.value = False
 
-#Running MLFRA light
+#MLFRA error LED light
 mlfraErrorLED = DigitalInOut(board.D16)
 mlfraErrorLED.direction = Direction.OUTPUT
 mlfraErrorLED.value = False
+
+#MLFRA running LED light
+mlfraRunningLED = DigitalInOut(board.D21)
+mlfraRunningLED.direction = Direction.OUTPUT
+mlfraRunningLED.value = False
 
 #Error output GPIO
 mlfraError = DigitalInOut(board.D6)
@@ -31,6 +38,11 @@ mlfraResult = DigitalInOut(board.D13)
 mlfraResult.direction = Direction.OUTPUT
 mlfraResult.value = False
 
+#Last calibration button
+lastCali = DigitalInOut(board.D20)
+lastCali.direction = Direction.INPUT
+lastCali.pull = Pull.DOWN
+
 #Create and bind to the calibration serial port
 caliSer = serial.Serial("/dev/ttyS0",  57600)
 
@@ -41,11 +53,12 @@ except:
     ser = serial.serial("/dev/ttyACM1", baudrate=115200)
 
 #The debugging file output
-theFilename = "/" + os.path.join("home","pi","Documents","MLFRA",datetime.now().strftime("%Y%m%d") + ".txt")
-if(not os.path.isfile(theFilename)):
-    f = open(theFilename, 'w')
-    f.write("current_time,mlfra_result,mlfra_percent,time\n")
-    f.close()
+if(debug):
+    theFilename = "/" + os.path.join("home","pi","Documents","MLFRA",datetime.now().strftime("%Y%m%d") + ".txt")
+    if(not os.path.isfile(theFilename)):
+        f = open(theFilename, 'w')
+        f.write("current_time,mlfra_result,mlfra_percent,time\n")
+        f.close()
 
 def startMLServer():
     print("Starting MLFRA Server")
@@ -100,6 +113,9 @@ def queryMLFRA(theBlock, blockSlice):
     if(not isServerAlive()):
         return -4
 
+    #Set LED light to running
+    mlfraRunningLED.value = True
+
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             #Convert the array to byte array
@@ -132,13 +148,15 @@ def queryMLFRA(theBlock, blockSlice):
             runRes.append(elapsedSec)
 
             #Write the output results to the debugging file
-            f = open(theFilename, 'a')
-            f.write(datetime.now().strftime("%m/%d/%Y %H:%M:%S") + ",")
-            f.write(str(runRes[0]) + "," + str(runRes[1]) + "," + str(runRes[2]) + "\n")
-            f.close()
+            if(debug):
+                f = open(theFilename, 'a')
+                f.write(datetime.now().strftime("%m/%d/%Y %H:%M:%S") + ",")
+                f.write(str(runRes[0]) + "," + str(runRes[1]) + "," + str(runRes[2]) + "\n")
+                f.close()
 
             #Print the output results and update the LED
             print(runRes) 
+            mlfraRunningLED.value = False
 
             #update the output digital lines with the result
             if(runRes != None):
@@ -163,6 +181,7 @@ def queryMLFRA(theBlock, blockSlice):
     except Exception as err:
         mlfraResultLED.value = mlfraResult.value = False
         mlfraError.value = mlfraErrorLED.value = True
+        mlfraRunningLED.value = False
         print(err)
         return(-3)
 
@@ -172,6 +191,7 @@ def signal_handler(sig, frame):
     mlfraResult.value = False
     mlfraError.value = True
     mlfraErrorLED.value = False
+    mlfraRunningLED.value = False
     stopMLServer()
     ser.close()
     caliSer.close()
@@ -181,18 +201,32 @@ signal.signal(signal.SIGINT, signal_handler)
 #Stop all servers that are orphaned and start a fresh instance
 stopMLServer()
 startMLServer()
-time.sleep(5)
+time.sleep(2)
 
+#Baseline variables
 checkInterval = 10 * 100 # 10 seconds at 100 hz
 blockSize = 60 * 100 # 60 seconds at 100 hz
+checkCali = 0.2 * 100 # Check for last cali every 0.2 seconds
 curInd = 0
 theData = [0] * blockSize
+
+#The function for converting ADC to mmHg
 linear_M = 0.0
 linear_B = 0.0
+calibrated = False
+fxnFile = "/home/pi/Documents/MLFRA/fxn.txt"
+if(not os.path.exists(fxnFile)):
+    f = open(fxnFile, 'w')
+    f.write("linear_M,linear_B\n")
+    f.close()
 
+#The start byte
 startDataByte=b'\xff'
+
+#The thread variable for keeping track of if its alive
 theThread = None
 
+#loop for forever
 while True:
     try:
         #Break into calibration sequence
@@ -200,8 +234,12 @@ while True:
             theVal = caliSer.readline()
             theStr = theVal.decode("utf-8")
             theIndicies = theStr.strip("/r").strip("/n").split(",")           
-            linear_M = float(theIndicies[0]) / 10000.0
-            linear_B = float(theIndicies[1]) / 100.0
+            linear_M = float(theIndicies[0]) / 100000.0
+            linear_B = float(theIndicies[1]) / 1000.0
+            f = open(fxnFile, 'a')
+            f.write(str(linear_M) + "," + str(linear_B) + "\n")
+            f.close()
+            calibrated = True
         
         #Read the serial value (0xff followed by 16 bit signed integer)
         singleByte = ser.read(1)
@@ -213,11 +251,15 @@ while True:
 
             #Make sure that the most significant byte is not the start byte
             while(line[0] == startDataByte):
-                line[0] = line[1]
-                line[1] = ser.read(1)
+                newLine = bytes('us')
+                newLine.append = line[1]
+                newLine.append = ser.read(1)
+                del line
+                line = newLine
+                del newLine
                 print("Prevented Frame Shift")
         
-            #Parse the value and convert to float
+            #Parse the value (signed 16 bit integer)
             parsedVal = int(struct.unpack('>h', line)[0])
        
             #Place the new value into the array 
@@ -225,10 +267,27 @@ while True:
             #print(theData[curInd], parsedVal, linear_M, linear_B)
             curInd += 1
 
+            #Check to see if it the calibration button is pressed to load old calibration settings
+            if(not calibrated and curInd % checkCali == 0 and lastCali.value):
+                #Load the last time of the file
+                lastLine = None
+                f = open(fxnFile)
+                for ind, line in enumerate(f):
+                    if(ind > 0 and len(line) > 1): lastLine = line.strip("\n")
+                f.close()
+               
+                #Parse the last line into the two values and convert to flow 
+                if(lastLine != None):
+                    theVals = lastLine.split(",")
+                    linear_M = float(theVals[0])
+                    linear_B = float(theVals[1])
+                    calibrated = True
+                    print(linear_M, linear_B)
+
             #Query the MLFRA only if the last thread is dead
-            if(curInd % checkInterval == 0 and 
+            if(calibrated and curInd % checkInterval == 0 and 
                 (theThread == None or (theThread != None and not theThread.is_alive()))):
-                #Make Copies of the data            
+                #Make Copies of the data and send data in a separate thread            
                 toSendCopy = theData.copy()
                 toSendInd = curInd
                 theThread = threading.Thread(target=queryMLFRA, args=(toSendCopy, toSendInd,))
@@ -238,5 +297,4 @@ while True:
             if(curInd >= blockSize): curInd = 0
     except Exception as err:
         print(err) 
-
 

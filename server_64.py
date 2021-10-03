@@ -37,11 +37,10 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     for x in dataStream.split(','):
                         inputArr.append(float(x))
 
-                    print(inputArr[0], inputArr[-1])
-
                     #Run the MLFRA algorithm 
                     print("Received:", len(inputArr), "and running MLFRA!")
                     YN, Prob = MLFRA_Wrapper(inputArr, 100)
+                    del inputArr
 
                     #Returning results
                     conn.sendall(bytearray(','.join([str(YN), str(Prob)]).encode('utf-8')))
