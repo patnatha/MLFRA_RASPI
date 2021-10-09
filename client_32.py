@@ -4,6 +4,7 @@ import signal
 import sys
 import struct
 import serial
+import serial.tools.list_ports
 from datetime import datetime
 import board
 import socket
@@ -48,9 +49,14 @@ caliSer = serial.Serial("/dev/ttyS0",  57600)
 
 #Create and bind the data serial object
 try:
-    ser = serial.Serial("/dev/ttyACM0", baudrate=115200)
+    a = serial.tools.list_ports.comports()
+    for p in a:
+        if("Arduino" in p.manufacturer and p.serial_number == "85036313630351802031"):
+            ser = serial.serial(p.device)
+            break
 except: 
-    ser = serial.serial("/dev/ttyACM1", baudrate=115200)
+    print("ERROR loading ADC arduino")
+    sys.exit(1)
 
 #The debugging file output
 if(debug):
