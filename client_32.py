@@ -11,6 +11,8 @@ import socket
 from digitalio import DigitalInOut, Direction, Pull
 from subprocess import Popen, DEVNULL, PIPE, run
 import threading
+import red_cap
+import which_or
 
 debug = False
 
@@ -123,6 +125,9 @@ def queryMLFRA(theBlock, blockSlice):
     #Set LED light to running
     mlfraRunningLED.value = True
 
+    #SentDateTimeStamp
+    sentDateTime = datetime.now()
+
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             #Convert the array to byte array
@@ -157,13 +162,22 @@ def queryMLFRA(theBlock, blockSlice):
             #Write the output results to the debugging file
             if(debug):
                 f = open(theFilename, 'a')
-                f.write(datetime.now().strftime("%m/%d/%Y %H:%M:%S") + ",")
+                f.write(sentDateTime.strftime("%m/%d/%Y %H:%M:%S") + ",")
                 f.write(str(runRes[0]) + "," + str(runRes[1]) + "," + str(runRes[2]) + "\n")
                 f.close()
 
             #Print the output results and update the LED
             print(runRes) 
             mlfraRunningLED.value = False
+
+            #Build the rec data push 
+            rcData = {'name': which_or.returnName(sentDateTime),
+                      'datetime': sentDateTime.strftime("%Y-%m-%d %H:%M:%S"),
+                      'yn': red_cap.convert_int(runRes[0]), 
+                      'probability': red_cap.convert_two_decimal(runRes[1]),
+                      'elapsed_time': red_cap.convert_two_decimal(runRes[2])}
+            rcRes = red_cap.post_redcap(rcData)
+            print("Red Cap:", rcRes)
 
             #update the output digital lines with the result
             if(runRes != None):
@@ -278,10 +292,18 @@ while True:
             if(not calibrated and curInd % checkCali == 0 and lastCali.value):
                 #Load the last time of the file
                 lastLine = None
+                lineCnt = 0
                 f = open(fxnFile)
                 for ind, line in enumerate(f):
                     if(ind > 0 and len(line) > 1): lastLine = line.strip("\n")
+                    lineCnt += 1
                 f.close()
+
+                #Truncate file if more than 100 lines
+                if(lineCnt > 100):
+                    f = open(fxnFile, 'w')
+                    f.write("linear_m,linear_b\n" + lastLine + "\n")
+                    f.close()
                
                 #Parse the last line into the two values and convert to flow 
                 if(lastLine != None):
