@@ -52,10 +52,11 @@ try:
     a = serial.tools.list_ports.comports()
     for p in a:
         if("Arduino" in p.manufacturer and p.serial_number == "85036313630351802031"):
-            ser = serial.serial(p.device)
+            ser = serial.Serial(p.device, baudrate=115200)
             break
-except: 
+except Exception as err: 
     print("ERROR loading ADC arduino")
+    print(err)
     sys.exit(1)
 
 #The debugging file output

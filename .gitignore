@@ -3,6 +3,7 @@ archive/*
 config/*
 data/*
 *.pkl
-mlfra_wrapper.py
 *.txt
 *.pyc
+*.auth
+*.swp
