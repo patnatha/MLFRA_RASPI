@@ -14,8 +14,6 @@ import threading
 import red_cap
 import which_or
 
-debug = False
-
 #MLFRA result LED light
 mlfraResultLED = DigitalInOut(board.D12)
 mlfraResultLED.direction = Direction.OUTPUT
@@ -60,14 +58,6 @@ except Exception as err:
     print("ERROR loading ADC arduino")
     print(err)
     sys.exit(1)
-
-#The debugging file output
-if(debug):
-    theFilename = "/" + os.path.join("home","pi","Documents","MLFRA",datetime.now().strftime("%Y%m%d") + ".txt")
-    if(not os.path.isfile(theFilename)):
-        f = open(theFilename, 'w')
-        f.write("current_time,mlfra_result,mlfra_percent,time\n")
-        f.close()
 
 def startMLServer():
     print("Starting MLFRA Server")
@@ -158,13 +148,6 @@ def queryMLFRA(theBlock, blockSlice):
             #Append the time results
             elapsedSec = round((time.monotonic() - stime), 2)
             runRes.append(elapsedSec)
-
-            #Write the output results to the debugging file
-            if(debug):
-                f = open(theFilename, 'a')
-                f.write(sentDateTime.strftime("%m/%d/%Y %H:%M:%S") + ",")
-                f.write(str(runRes[0]) + "," + str(runRes[1]) + "," + str(runRes[2]) + "\n")
-                f.close()
 
             #Print the output results and update the LED
             print(runRes) 
@@ -311,7 +294,7 @@ while True:
                     linear_M = float(theVals[0])
                     linear_B = float(theVals[1])
                     calibrated = True
-                    print(linear_M, linear_B)
+                    print("Loaded Config:",linear_M, linear_B)
 
             #Query the MLFRA only if the last thread is dead
             if(calibrated and curInd % checkInterval == 0 and 
