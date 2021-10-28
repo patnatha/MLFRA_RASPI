@@ -16,8 +16,9 @@ def convert_int(theVal):
         return(None)
     else:
         try:
-            return(str(int(round(theVal, 0))))
-        except:
+            return(str(int(theVal)))
+        except Exception as err:
+            print(err)
             return(None)
 
 def convert_two_decimal(theVal):

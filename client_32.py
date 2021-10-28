@@ -177,7 +177,7 @@ def queryMLFRA(theBlock, blockSlice):
                       'probability': red_cap.convert_two_decimal(runRes[1]),
                       'elapsed_time': red_cap.convert_two_decimal(runRes[2])}
             rcRes = red_cap.post_redcap(rcData)
-            print("Red Cap:", rcRes)
+            if(rcRes != 1): print("Red Cap:", rcRes)
 
             #update the output digital lines with the result
             if(runRes != None):
