@@ -244,7 +244,8 @@ while True:
             f.write(str(linear_M) + "," + str(linear_B) + "\n")
             f.close()
             calibrated = True
-        
+            print("New Calibration:", linear_M, linear_B)       
+ 
         #Read the serial value (0xff followed by 16 bit signed integer)
         singleByte = ser.read(1)
 
