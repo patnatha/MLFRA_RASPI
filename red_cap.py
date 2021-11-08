@@ -3,7 +3,6 @@ import json
 import sqlite3
 import time
 import threading
-import signal
 import sys
 
 tokenFile = "/home/pi/Documents/MLFRA/token.auth"
@@ -47,63 +46,56 @@ def create_sqlite_table():
     conn.close()
     
 def log_later(theDatas):
-    create_sqlite_table()
+    try:
+        create_sqlite_table()
 
-    conn = sqlite3.connect(dbFile)
-    cur = conn.cursor()
+        conn = sqlite3.connect(dbFile)
+        cur = conn.cursor()
 
-    sql = 'INSERT INTO ' + tableName + ' (the_text) VALUES("' + json.dumps(theDatas).replace('"', '\'') + '");'
-    #print(sql)
-    cur.execute(sql)
+        sql = 'INSERT INTO ' + tableName + ' (the_text) VALUES("' + json.dumps(theDatas).replace('"', '\'') + '");'
+        #print(sql)
+        cur.execute(sql)
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
+    except Exception as err:
+        print("log_later ERROR:", err)
 
-stop_event= threading.Event()
 def survail_db_to_upload():
     create_sqlite_table()
 
     while True:
-        conn = sqlite3.connect(dbFile)
-        cur = conn.cursor()
+        try:
+            conn = sqlite3.connect(dbFile)
+            cur = conn.cursor()
 
-        sql = "SELECT record_id, the_text FROM " + tableName
-        toDel = []
-        for row in cur.execute(sql):
-            theDatas = json.loads(row[1].replace("'","\""))
-            #print(theDatas)
-            postRes = post_redcap(theDatas)
-            if(postRes == 1):
-                toDel.append(str(row[0]))
-        conn.commit()
-        conn.close()
+            sql = "SELECT record_id, the_text FROM " + tableName
+            toDel = []
+            for row in cur.execute(sql):
+                theDatas = json.loads(row[1].replace("'","\""))
+                #print(theDatas)
+                postRes = post_redcap(theDatas)
+                if(postRes == 1):
+                    toDel.append(str(row[0]))
+            conn.commit()
+            conn.close()
 
-        print("SQLITE Posted:", len(toDel))
-        conn = sqlite3.connect(dbFile)
-        cur = conn.cursor()
-        for itemDel in toDel:
-            sql = "DELETE FROM " + tableName + " WHERE record_id = " + itemDel
-            cur.execute(sql)
-        conn.commit()
-        conn.close()
-
+            print("SQLITE Posted:", len(toDel))
+            conn = sqlite3.connect(dbFile)
+            cur = conn.cursor()
+            for itemDel in toDel:
+                sql = "DELETE FROM " + tableName + " WHERE record_id = " + itemDel
+                cur.execute(sql)
+            conn.commit()
+            conn.close()
+        except Exception as err:
+            print("survail_db_to_upload ERROR:", err)
+            
         time.sleep(60)
-
-        #Kill thread
-        if(stop_event.is_set()):
-            sys.exit(0)
 
 survailThread = threading.Thread(target=survail_db_to_upload, args=())
 survailThread.daemon = False
 survailThread.start()
-
-def signal_term_handler(signal, frame):
-    stop_event.set()
-    print("Killing Thread")
-    sys.exit(0)
-catchable_sigs = set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}
-for sig in catchable_sigs:
-    signal.signal(sig, signal_term_handler) 
 
 def post_redcap(theDatas):
     try:
