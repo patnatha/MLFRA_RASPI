@@ -4,6 +4,7 @@ import sqlite3
 import time
 import threading
 import signal
+import sys
 
 tokenFile = "/home/pi/Documents/MLFRA/token.auth"
 postUrl = "https://redcap.wakehealth.edu/redcap/api/"
@@ -100,7 +101,9 @@ def signal_term_handler(signal, frame):
     stop_event.set()
     print("Killing Thread")
     sys.exit(0)
-signal.signal(signal.SIGTERM, signal_term_handler)
+catchable_sigs = set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}
+for sig in catchable_sigs:
+    signal.signal(sig, signal_term_handler) 
 
 def post_redcap(theDatas):
     try:
